@@ -1,0 +1,14 @@
+spring:
+  data:
+    mongodb:
+      uri: ${CCG_MONGODB_URI:mongodb://localhost:27017/ccg}
+  kafka:
+    consumer:
+      group-id: ltuGiornaliereConsumers_consumerGroup
+      bootstrap-servers: ${CCG_KAFKA_URI:localhost:29092}
+    producer:
+      bootstrap-servers: ${CCG_KAFKA_URI:localhost:29092}
+    bootstrap-servers: ${CCG_KAFKA_URI:localhost:29092}
+logging:
+  level:
+    com.dxc.curvegas: WARN
