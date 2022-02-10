@@ -2,6 +2,7 @@ package com.dxc.curvegas.alletturegiornaliereconsumer.consumer;
 
 import com.dxc.curvegas.alletturegiornaliereconsumer.model.*;
 import com.dxc.curvegas.alletturegiornaliereconsumer.repository.CustomLtuGiornaliereAggregatedRepository;
+import com.dxc.curvegas.alletturegiornaliereconsumer.service.CurveGasService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -24,7 +25,9 @@ public class LtuGiornaliereConsumer {
     MongoTemplate mongoTemplate;
     @Autowired
     CustomLtuGiornaliereAggregatedRepository repository;
-    Logger log = LoggerFactory.getLogger(this.getClass());
+    private Logger log = LoggerFactory.getLogger(this.getClass());
+    @Autowired
+    private CurveGasService curveGasService;
 
     public LtuGiornaliereConsumer() {
         SimpleModule module = new SimpleModule();
@@ -62,16 +65,7 @@ public class LtuGiornaliereConsumer {
         if (retrievedLtuAggr == null) {
             // Non c'è ancora nessun dato aggregato con questo anno/mese/pdf/tipo
             // Ne creo uno nuovo e lo inserisco nel db
-            LtuGiornaliereAggregatedDto ltuGiornaliereAggregatedDto =
-                    LtuGiornaliereAggregatedDto
-                            .builder()
-                            .codPdf(nuovaLetturaGiornaliera.codPdf)
-                            .codTipoFornitura(nuovaLetturaGiornaliera.codTipoFornitura)
-                            .codPdm(nuovaLetturaGiornaliera.codPdm)
-                            .anno(anno)
-                            .mese(mese)
-                            .codTipVoceLtu(nuovaLetturaGiornaliera.codTipVoceLtu)
-                            .build();
+            LtuGiornaliereAggregatedDto ltuGiornaliereAggregatedDto = LtuGiornaliereAggregatedDto.builder().codPdf(nuovaLetturaGiornaliera.codPdf).codTipoFornitura(nuovaLetturaGiornaliera.codTipoFornitura).codPdm(nuovaLetturaGiornaliera.codPdm).anno(anno).mese(mese).codTipVoceLtu(nuovaLetturaGiornaliera.codTipVoceLtu).build();
             LtuGiornaliereLetturaSingolaDto letturaSingola = new LtuGiornaliereLetturaSingolaDto();
             BeanUtils.copyProperties(nuovaLetturaGiornaliera.getLetturaSingola(), letturaSingola);
             letturaSingola.setQuaLetturaStimata(letturaSingola.getQuaLettura());
@@ -81,36 +75,19 @@ public class LtuGiornaliereConsumer {
             for (Date runningDate = getFirstDateOfMonth(letturaSingola.datLettura); !runningDate.after(getLastDateOfMonth(letturaSingola.datLettura)); runningDate = DateUtils.addDays(runningDate, 1)) {
                 // TODO codice per creare il nuovo mese se non ci sono aggregati con le stesse chiavi
                 Date finalRunningDate = runningDate;
-                if (
-                        !ltuGiornaliereAggregatedDto
-                                .lettureSingole
-                                .stream()
-                                .anyMatch(ltuSingola -> ltuSingola.getDatLettura().compareTo(finalRunningDate) ==0)
-                ){
+                if (!ltuGiornaliereAggregatedDto.lettureSingole.stream().anyMatch(ltuSingola -> ltuSingola.getDatLettura().compareTo(finalRunningDate) == 0)) {
                     System.out.println();
                     letturaSingola = new LtuGiornaliereLetturaSingolaDto();
-                    BeanUtils.copyProperties(
-                            nuovaLetturaGiornaliera
-                                    .getLetturaSingola()
-                                    .toBuilder()
-                                    .quaLettura(null)
-                                    .quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura)
-                                    .datLettura(finalRunningDate)
-                                    .build(),
-                            letturaSingola
-                    );
-                    letturaSingola.storico = new ArrayList<>(Arrays.asList(
-                            nuovaLetturaGiornaliera
-                                    .getLetturaSingola()
-                                    .toBuilder()
-                                    .quaLettura(null)
-                                    .quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura)
-                                    .datLettura(finalRunningDate)
-                                    .build()
-                    ));
+                    BeanUtils.copyProperties(nuovaLetturaGiornaliera.getLetturaSingola().toBuilder().quaLettura(null).quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura).datLettura(finalRunningDate).build(), letturaSingola);
+                    letturaSingola.storico = new ArrayList<>(Arrays.asList(nuovaLetturaGiornaliera.getLetturaSingola().toBuilder().quaLettura(null).quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura).datLettura(finalRunningDate).build()));
                     ltuGiornaliereAggregatedDto.lettureSingole.add(letturaSingola);
                 }
             }
+
+            ltuGiornaliereAggregatedDto.setMaxQuaLettura(ltuGiornaliereAggregatedDto.getMaxQuaLettura());
+            ltuGiornaliereAggregatedDto.setMinQuaLettura(ltuGiornaliereAggregatedDto.getMinQuaLettura());
+//            ltuGiornaliereAggregatedDto.setConsumoReale(curveGasService.getConsumoReale(ltuGiornaliereAggregatedDto));
+            curveGasService.updateConsumiReali(ltuGiornaliereAggregatedDto);
 
             mongoTemplate.insert(ltuGiornaliereAggregatedDto, "ltuGiornaliereAggregated");
         } else {
@@ -130,24 +107,16 @@ public class LtuGiornaliereConsumer {
                 // Per questo anno/mese/pdf/tipo c'è già una lettura con dtaLettura uguale a quella arrivata
                 // Aggiorno i campi vivi, inserisco la lettura arrivata anche nello storico e salvo
                 LtuGiornaliereLetturaSingolaItemDto storicoItem = new LtuGiornaliereLetturaSingolaItemDto();
-                Integer randomIntEstimation = (int)(new Random().nextFloat() * 100);
-                BeanUtils.copyProperties(
-                        nuovaLetturaGiornaliera
-                                .toBuilder()
-                                .quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura + randomIntEstimation)
-                                .build(),
-                        storicoItem
-                );
+                Integer randomIntEstimation = (int) (new Random().nextFloat() * 100);
+                BeanUtils.copyProperties(nuovaLetturaGiornaliera.toBuilder().quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura + randomIntEstimation).build(), storicoItem);
                 foundLtuGiornaliera.storico.add(storicoItem);
-                BeanUtils.copyProperties(
-                        nuovaLetturaGiornaliera
-                                .toBuilder()
-                                .quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura + randomIntEstimation)
-                                .build(),
-                        foundLtuGiornaliera
-                );
+                BeanUtils.copyProperties(nuovaLetturaGiornaliera.toBuilder().quaLetturaStimata(nuovaLetturaGiornaliera.quaLettura + randomIntEstimation).build(), foundLtuGiornaliera);
                 retrievedLtuAggr.lettureSingole.removeIf(obj -> obj.datLettura.compareTo(foundLtuGiornaliera.datLettura) == 0);
                 retrievedLtuAggr.lettureSingole.add(foundLtuGiornaliera);
+                retrievedLtuAggr.setMaxQuaLettura(retrievedLtuAggr.getMaxQuaLettura());
+                retrievedLtuAggr.setMinQuaLettura(retrievedLtuAggr.getMinQuaLettura());
+                retrievedLtuAggr.setConsumoReale(curveGasService.getConsumoReale(retrievedLtuAggr));
+                curveGasService.updateConsumiReali(retrievedLtuAggr);
                 repository.save(retrievedLtuAggr);
 
             }

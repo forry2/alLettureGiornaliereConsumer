@@ -4,6 +4,6 @@ import com.dxc.curvegas.alletturegiornaliereconsumer.model.LtuGiornaliereAggrega
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface CustomLtuGiornaliereAggregatedRepository extends MongoRepository<LtuGiornaliereAggregatedDto, String> {
-    LtuGiornaliereAggregatedDto getLtuGiornaliereAggregatedDtoByAnnoAndMeseAndCodPdfAndCodTipoFornitura(String anno, String mese, String codPdf, String codTipoFornitura);
 
-    LtuGiornaliereAggregatedDto getLtuGiornaliereAggregatedDtoByAnnoAndMeseAndCodPdfAndCodTipoFornituraAndCodTipVoceLtu(String anno, String mese, String codPdf, String codTipoFornitura, String codTipVoceLtu);}
+    LtuGiornaliereAggregatedDto getLtuGiornaliereAggregatedDtoByAnnoAndMeseAndCodPdfAndCodTipoFornituraAndCodTipVoceLtu(String anno, String mese, String codPdf, String codTipoFornitura, String codTipVoceLtu);
+}
