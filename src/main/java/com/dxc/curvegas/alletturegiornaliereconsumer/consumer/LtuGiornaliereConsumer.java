@@ -88,6 +88,23 @@ public class LtuGiornaliereConsumer {
             ltuGiornaliereAggregatedDto.setMinQuaLettura(ltuGiornaliereAggregatedDto.getMinQuaLettura());
 //            ltuGiornaliereAggregatedDto.setConsumoReale(curveGasService.getConsumoReale(ltuGiornaliereAggregatedDto));
             curveGasService.updateConsumiReali(ltuGiornaliereAggregatedDto);
+            LtuGiornaliereLetturaSingolaDto firstValidLtu = ltuGiornaliereAggregatedDto
+                    .lettureSingole
+                    .stream()
+                    .filter(l -> l.getQuaLettura() != null)
+                    .min(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                    .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+            ltuGiornaliereAggregatedDto.setDtaPrimaLetturaValida(firstValidLtu.getDatLettura());
+            ltuGiornaliereAggregatedDto.setPrimaLetturaValida(firstValidLtu.getQuaLettura());
+            LtuGiornaliereLetturaSingolaDto lastValidLtu = ltuGiornaliereAggregatedDto
+                    .lettureSingole
+                    .stream()
+                    .filter(l -> l.getQuaLettura() != null)
+                    .max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                    .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+            ltuGiornaliereAggregatedDto.setDtaUltimaLetturaValida(lastValidLtu.getDatLettura());
+            ltuGiornaliereAggregatedDto.setUltimaLetturaValida(lastValidLtu.getQuaLettura());
+
 
             mongoTemplate.insert(ltuGiornaliereAggregatedDto, "ltuGiornaliereAggregated");
         } else {
@@ -117,6 +134,22 @@ public class LtuGiornaliereConsumer {
                 retrievedLtuAggr.setMinQuaLettura(retrievedLtuAggr.getMinQuaLettura());
                 retrievedLtuAggr.setConsumoReale(curveGasService.getConsumoReale(retrievedLtuAggr));
                 curveGasService.updateConsumiReali(retrievedLtuAggr);
+                LtuGiornaliereLetturaSingolaDto firstValidLtu = retrievedLtuAggr
+                        .lettureSingole
+                        .stream()
+                        .filter(l -> l.getQuaLettura() != null)
+                        .min(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                        .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+                retrievedLtuAggr.setDtaPrimaLetturaValida(firstValidLtu.getDatLettura());
+                retrievedLtuAggr.setPrimaLetturaValida(firstValidLtu.getQuaLettura());
+                LtuGiornaliereLetturaSingolaDto lastValidLtu = retrievedLtuAggr
+                        .lettureSingole
+                        .stream()
+                        .filter(l -> l.getQuaLettura() != null)
+                        .max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                        .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+                retrievedLtuAggr.setDtaUltimaLetturaValida(lastValidLtu.getDatLettura());
+                retrievedLtuAggr.setUltimaLetturaValida(lastValidLtu.getQuaLettura());
                 repository.save(retrievedLtuAggr);
 
             }

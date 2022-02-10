@@ -1,16 +1,15 @@
 package com.dxc.curvegas.alletturegiornaliereconsumer.model;
 
-import com.dxc.curvegas.alletturegiornaliereconsumer.service.CurveGasService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Date;
 
 @Data
 @AllArgsConstructor
@@ -30,6 +29,10 @@ public class LtuGiornaliereAggregatedDto {
     public Integer consumoReale;
     public Integer minQuaLettura;
     public Integer maxQuaLettura;
+    public Date dtaPrimaLetturaValida;
+    public Integer primaLetturaValida;
+    public Date dtaUltimaLetturaValida;
+    public Integer ultimaLetturaValida;
     public ArrayList<LtuGiornaliereLetturaSingolaDto> lettureSingole;
 
     public Integer getMaxQuaLettura() {
