@@ -18,7 +18,6 @@ public class LtuGiornaliereLetturaSingolaItemDto {
     public String numMtcAppar;
     public String codTipLtuGio;
     public Integer quaLettura;
-    public Integer quaLetturaStimata;
     public Date datLtuPrecedente;
     public Integer quaLtuPrecedente;
     public String codFlgValida;

@@ -11,4 +11,4 @@ spring:
     bootstrap-servers: ${CCG_KAFKA_URI:localhost:29092}
 logging:
   level:
-    com.dxc.curvegas: WARN
+    com.dxc.curvegas: DEBUG

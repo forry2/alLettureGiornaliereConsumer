@@ -24,7 +24,6 @@ public class LtuGiornaliereRawDto {
     public String numMtcAppar;
     public String codTipLtuGio;
     public Integer quaLettura;
-    public Integer quaLetturaStimata;
     public Date datLtuPrecedente;
     public Integer quaLtuPrecedente;
     public String codFlgValida;
@@ -58,7 +57,6 @@ public class LtuGiornaliereRawDto {
                 .numMtcAppar(numMtcAppar)
                 .codTipLtuGio(codTipLtuGio)
                 .quaLettura(quaLettura)
-                .quaLetturaStimata(quaLetturaStimata)
                 .datLtuPrecedente(datLtuPrecedente)
                 .quaLtuPrecedente(quaLtuPrecedente)
                 .codFlgValida(codFlgValida)

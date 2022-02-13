@@ -1,18 +1,20 @@
 package com.dxc.curvegas.alletturegiornaliereconsumer.model;
 
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class LtuGiornaliereDeserializer extends JsonDeserializer<LtuGiornaliereRawDto> {
+    private final Logger log = LoggerFactory.getLogger(this.getClass());
+
     @Override
     public LtuGiornaliereRawDto deserialize(JsonParser jp, DeserializationContext dc) throws IOException {
         JsonNode node = jp.getCodec().readTree(jp);
@@ -51,10 +53,10 @@ public class LtuGiornaliereDeserializer extends JsonDeserializer<LtuGiornaliereR
             ltuGiornalereDto.codFlgRetPbl = node.get("COD_FLG_RET_PBL").isNull() ? null : node.get("COD_FLG_RET_PBL").asText();
             ltuGiornalereDto.datForzatura = dateFromParsedString(node.get("DAT_FORZATURA").asText());
             ltuGiornalereDto.codFlgForzata = node.get("COD_FLG_FORZATA").isNull() ? null : node.get("COD_FLG_FORZATA").asText();
+        } catch (Exception e) {
+            log.error("Exception while parsing raw message");
         }
-        catch (Exception e){
-            System.out.println();
-        }
+        log.debug("\nReceived content:\n{}\nParsed Object:\n{}", node.toPrettyString(), ltuGiornalereDto.toString());
         return ltuGiornalereDto;
     }
 
@@ -62,6 +64,7 @@ public class LtuGiornaliereDeserializer extends JsonDeserializer<LtuGiornaliereR
         if (dateStr.equals("null")) return null;
         try {
             return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S").parse(dateStr);
+
         } catch (ParseException e) {
             return null;
         }

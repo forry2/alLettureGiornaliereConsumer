@@ -4,12 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Data
 @AllArgsConstructor
@@ -19,40 +22,94 @@ import java.util.Date;
 
 public class LtuGiornaliereAggregatedDto {
     @Id
-    public String id;
-    public String codPdf;
-    public String mese;
-    public String anno;
-    public String codTipoFornitura;
-    public String codPdm;
-    public String codTipVoceLtu;
-    public Integer consumoReale;
-    public Integer minQuaLettura;
-    public Integer maxQuaLettura;
-    public Date dtaPrimaLetturaValida;
-    public Integer primaLetturaValida;
-    public Date dtaUltimaLetturaValida;
-    public Integer ultimaLetturaValida;
+    String id;
+    String codPdf;
+    String mese;
+    String anno;
+    Date firstCurveDate;
+    Date lastCurveDate;
+    String codTipoFornitura;
+    String codPdm;
+    String codTipVoceLtu;
+    Integer consumoReale;
+    Integer minQuaLettura;
+    Integer maxQuaLettura;
+    Date dtaPrimaLetturaValida;
+    Integer primaLetturaValida;
+    Date dtaUltimaLetturaValida;
+    Integer ultimaLetturaValida;
+    LtuGiornaliereStatsDto ltuGiornaliereStatsDto;
     public ArrayList<LtuGiornaliereLetturaSingolaDto> lettureSingole;
 
+    public LtuGiornaliereAggregatedDto pushLtuGiornalieraRaw(LtuGiornaliereRawDto rawLtu){
+        if (lettureSingole == null )
+            lettureSingole = new ArrayList<>();
+        Optional<LtuGiornaliereLetturaSingolaDto> ltuSingola =
+                lettureSingole
+                        .stream()
+                        .filter(ltu -> ltu.datLettura.compareTo(rawLtu.datLettura) == 0)
+                        .findFirst();
+        if (ltuSingola.isPresent()){
+            // C'è una lettura per questa data
+            // push nello storico e inserimento della nuova lettura a livello 0
+            LtuGiornaliereLetturaSingolaItemDto ltuToPush = new LtuGiornaliereLetturaSingolaItemDto();
+            BeanUtils.copyProperties(
+                    rawLtu,
+                    ltuToPush
+            );
+            ltuSingola.get().storico.add(ltuToPush);
+            BeanUtils.copyProperties(
+                    rawLtu,
+                    ltuSingola.get()
+            );
+        }
+        else {
+            // Non c'è una lettura per questa data
+            // Aggiungo la data, aggiunto la lettura e ritorno
+            LtuGiornaliereLetturaSingolaDto singolaDto = new LtuGiornaliereLetturaSingolaDto();
+            BeanUtils.copyProperties(rawLtu, singolaDto);
+            singolaDto.storico = new ArrayList<>();
+            LtuGiornaliereLetturaSingolaItemDto singolaItemDto = new LtuGiornaliereLetturaSingolaItemDto();
+            BeanUtils.copyProperties(rawLtu, singolaItemDto);
+            singolaDto.storico.add(singolaItemDto);
+            this.lettureSingole.add(singolaDto);
+        }
+        return this;
+    }
+
     public Integer getMaxQuaLettura() {
-        Integer max = lettureSingole
-                .stream()
-                .filter(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getQuaLettura() != null)
-                .max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getQuaLettura))
-                .map(LtuGiornaliereLetturaSingolaDto::getQuaLettura)
-                .orElse(null);
+        Integer max = lettureSingole.stream().filter(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getQuaLettura() != null).max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getQuaLettura)).map(LtuGiornaliereLetturaSingolaDto::getQuaLettura).orElse(null);
         return max;
     }
 
     public Integer getMinQuaLettura() {
-        Integer min = lettureSingole
-                .stream()
-                .filter(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getQuaLettura() != null)
-                .min(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getQuaLettura))
-                .map(LtuGiornaliereLetturaSingolaDto::getQuaLettura)
-                .orElse(null);
+        Integer min = lettureSingole.stream().filter(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getQuaLettura() != null).min(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getQuaLettura)).map(LtuGiornaliereLetturaSingolaDto::getQuaLettura).orElse(null);
         return min;
+    }
+
+    public LtuGiornaliereAggregatedDto updateStatistics() {
+        maxQuaLettura = getMaxQuaLettura();
+        minQuaLettura = getMinQuaLettura();
+        LtuGiornaliereLetturaSingolaDto firstValidLtu = lettureSingole
+                .stream()
+                .filter(l -> l.getQuaLettura() != null)
+                .min(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+        dtaPrimaLetturaValida = firstValidLtu.getDatLettura();
+        primaLetturaValida = firstValidLtu.getQuaLettura();
+        LtuGiornaliereLetturaSingolaDto lastValidLtu = lettureSingole
+                .stream()
+                .filter(l -> l.getQuaLettura() != null)
+                .max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura))
+                .orElse(LtuGiornaliereLetturaSingolaDto.builder().datLettura(null).build());
+        dtaUltimaLetturaValida = lastValidLtu.getDatLettura();
+        ultimaLetturaValida = lastValidLtu.getQuaLettura();
+
+        if (ltuGiornaliereStatsDto == null) ltuGiornaliereStatsDto = new LtuGiornaliereStatsDto();
+        ltuGiornaliereStatsDto.numLtuGte25000 = (lettureSingole.isEmpty() ? 0 : lettureSingole.stream().filter(ltu -> ltu.getQuaLettura() != null && ltu.getQuaLettura() >= 25000).collect(Collectors.counting()).intValue());
+        ltuGiornaliereStatsDto.numLtuGte1000Lt25000 = (lettureSingole.isEmpty() ? 0 : lettureSingole.stream().filter(ltu -> ltu.getQuaLettura() != null && ltu.getQuaLettura() >= 1000 && ltu.getQuaLettura() < 25000).collect(Collectors.counting()).intValue());
+        ltuGiornaliereStatsDto.numLtuLt1000 = (lettureSingole.isEmpty() ? 0 : lettureSingole.stream().filter(ltu -> ltu.getQuaLettura() != null && ltu.getQuaLettura() < 1000).collect(Collectors.counting()).intValue());
+        return this;
     }
 
 }
