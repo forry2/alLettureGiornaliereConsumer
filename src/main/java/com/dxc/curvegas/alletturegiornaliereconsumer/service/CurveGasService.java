@@ -9,6 +9,7 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -18,7 +19,9 @@ import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
+import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static org.springframework.data.mongodb.core.aggregation.Aggregation.*;
 
@@ -120,13 +123,45 @@ public class CurveGasService {
         return results.getUniqueMappedResult().getDate("next4Date");
     }
 
+    public ArrayList<LtuGiornaliereAggregatedDto> getInterpolationLtuGiornaliereAggregatedList(
+            String codPdf,
+            String codPdm,
+            String codTipoFornitura,
+            String codTipVoceLtu,
+            Date interpolationStartDate,
+            Date interpolationEndDate
+    ){
+        ArrayList<AggregationOperation> aggrList = new ArrayList<>();
+        Date lowerFirstDateOfMonth = Date.from(interpolationStartDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().withDayOfMonth(1).atZone(ZoneId.systemDefault()).toInstant());
+        Date higherFirstDateOfMonth = Date.from(interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().withDayOfMonth(1).atZone(ZoneId.systemDefault()).toInstant());
+        Set<Date> firstDates = new HashSet<>();
+        Date runningDate;
+        for (
+                runningDate = lowerFirstDateOfMonth;
+                runningDate.compareTo(higherFirstDateOfMonth) <= 0;
+                runningDate = DateUtils.addMonths(runningDate, 1)
+        ){
+            firstDates.add(runningDate);
+        }
+        aggrList.add(match(Criteria
+                .where("codPdf").is(codPdf)
+                .and("codPdm").is(codPdm)
+                .and("codTipoFornitura").is(codTipoFornitura)
+                .and("codTipVoceLtu").is(codTipVoceLtu)
+                .and("firstCurveDate").in(firstDates)
+        ));
+        aggrList.add(sort(Sort.Direction.ASC, "dtaPrimaLetturaValida"));
+
+        return new ArrayList<LtuGiornaliereAggregatedDto>(mongoTemplate.aggregate(newAggregation(aggrList),"ltuGiornaliereAggregated", LtuGiornaliereAggregatedDto.class).getMappedResults());
+    }
+
     public void interpolateAggregatedLtusForward(LtuGiornaliereRawDto rawDto){
         Date interpolationStartDate = rawDto.getDatLettura();
         Date interpolationEndDate = findNext4DateForward(rawDto);
         if (interpolationEndDate == null){
             // Non ci sono letture 4 dalla lettura di inserimento in avanti
             // Caso limite ingestion: riempire di 3 fino a fine mese
-            LtuGiornaliereAggregatedDto currentAggrLtu = repository.getLtuGiornaliereAggregatedDtoByCodPdfAndCodPdmAndCodTipoFornituraAndCodTipVoceLtuAndFirstCurveDateLessThanEqualAndLastCurveDateGreaterThanEqualOrderByFirstCurveDate(
+            LtuGiornaliereAggregatedDto currentAggrLtu = getInterpolationLtuGiornaliereAggregatedList(
                     rawDto.getCodPdf(),
                     rawDto.getCodPdm(),
                     rawDto.getCodTipoFornitura(),
@@ -149,32 +184,62 @@ public class CurveGasService {
         }
 
         ArrayList<LtuGiornaliereAggregatedDto> ltuAggrInterpolationList =
-                repository.getLtuGiornaliereAggregatedDtoByCodPdfAndCodPdmAndCodTipoFornituraAndCodTipVoceLtuAndFirstCurveDateLessThanEqualAndLastCurveDateGreaterThanEqualOrderByFirstCurveDate(
+                getInterpolationLtuGiornaliereAggregatedList(
+                        rawDto.getCodPdf(),
+                        rawDto.getCodPdm(),
+                        rawDto.getCodTipoFornitura(),
+                        rawDto.getCodTipVoceLtu(),
+                        interpolationStartDate,
+                        interpolationEndDate
+                );
+        LtuGiornaliereLetturaSingolaDto firstInterpolationLtuSingola =
+                getInterpolationLtuGiornaliereAggregatedList(
                         rawDto.getCodPdf(),
                         rawDto.getCodPdm(),
                         rawDto.getCodTipoFornitura(),
                         rawDto.getCodTipVoceLtu(),
                         interpolationStartDate,
                         interpolationStartDate
-
-                );
-        Integer letturaSingolaEndDate =
-                repository.getLtuGiornaliereAggregatedDtoByCodPdfAndCodPdmAndCodTipoFornituraAndCodTipVoceLtuAndFirstCurveDateLessThanEqualAndLastCurveDateGreaterThanEqualOrderByFirstCurveDate(
+                ).get(0).lettureSingole.stream().filter(ltu -> ltu.datLettura.compareTo(interpolationStartDate) == 0).findFirst().get();
+        LtuGiornaliereLetturaSingolaDto lastInterpolationLtuSingola =
+                getInterpolationLtuGiornaliereAggregatedList(
                         rawDto.getCodPdf(),
                         rawDto.getCodPdm(),
                         rawDto.getCodTipoFornitura(),
                         rawDto.getCodTipVoceLtu(),
                         interpolationEndDate,
                         interpolationEndDate
-                )
-                        .get(0)
-                        .getLettureSingole()
-                        .stream()
-                        .filter(ltu -> ltu.datLettura.compareTo(interpolationEndDate)== 0)
-                        .findFirst()
-                        .get()
-                        .getQuaLettura();
+                ).get(0).lettureSingole.stream().filter(ltu -> ltu.datLettura.compareTo(interpolationEndDate) == 0).findFirst().get();
+        Integer ltuDelta = lastInterpolationLtuSingola.getQuaLettura() - firstInterpolationLtuSingola.getQuaLettura();
+        long deltaDays = TimeUnit.DAYS.convert(lastInterpolationLtuSingola.getDatLettura().getTime() - firstInterpolationLtuSingola.getDatLettura().getTime(), TimeUnit.MILLISECONDS);
+        Date runningDate;
+        ArrayList<LtuGiornaliereRawDto> interpolationsLtu = new ArrayList<>();
+        int interpolationIndex = 1;
+        for(
+                runningDate = DateUtils.addDays(interpolationStartDate,1);
+                runningDate.before(interpolationEndDate);
+                runningDate = DateUtils.addDays(runningDate, 1)
+        )
+        {
+            LtuGiornaliereRawDto newRawDto = new LtuGiornaliereRawDto();
+            BeanUtils.copyProperties(firstInterpolationLtuSingola, newRawDto);
+            Integer interpolatedQuaLettura = Math.toIntExact(firstInterpolationLtuSingola.getQuaLettura() + ltuDelta * interpolationIndex / deltaDays);
+            newRawDto = newRawDto.toBuilder().datLettura(runningDate).codTipLtuGio("3").quaLettura(interpolatedQuaLettura).build();
+            interpolationsLtu.add(newRawDto);
+            interpolationIndex++;
+        }
 
+        interpolationsLtu.forEach(
+                rawDto1 -> {
+                    ltuAggrInterpolationList
+                            .stream()
+                            .filter(aggr -> !aggr.getFirstCurveDate().after(rawDto1.datLettura) && !aggr.getLastCurveDate().before(rawDto1.datLettura))
+                            .findFirst()
+                            .get()
+                            .pushLtuGiornalieraRaw(rawDto1);
+                }
+        );
+        repository.saveAll(ltuAggrInterpolationList);
         //TODO completare il codice
     }
 

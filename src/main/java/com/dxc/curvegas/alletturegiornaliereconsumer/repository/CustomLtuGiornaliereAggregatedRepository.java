@@ -12,7 +12,7 @@ public interface CustomLtuGiornaliereAggregatedRepository extends MongoRepositor
 {
     LtuGiornaliereAggregatedDto getLtuGiornaliereAggregatedDtoByAnnoAndMeseAndCodPdfAndCodTipoFornituraAndCodTipVoceLtu(String anno, String mese, String codPdf, String codTipoFornitura, String codTipVoceLtu);
 
-    ArrayList<LtuGiornaliereAggregatedDto> getLtuGiornaliereAggregatedDtoByCodPdfAndCodPdmAndCodTipoFornituraAndCodTipVoceLtuAndFirstCurveDateLessThanEqualAndLastCurveDateGreaterThanEqualOrderByFirstCurveDate(
-            String codPdf, String codPdm, String codTipoFornitura, String codTipVoceLtu, Date firstCurveDateBefore, Date lastCurveDateAfter
-    );
+//    ArrayList<LtuGiornaliereAggregatedDto> getLtuGiornaliereAggregatedDtoByCodPdfAndCodPdmAndCodTipoFornituraAndCodTipVoceLtuAndFirstCurveDateLessThanEqualAndLastCurveDateGreaterThanEqualOrderByFirstCurveDate(
+//            String codPdf, String codPdm, String codTipoFornitura, String codTipVoceLtu, Date firstCurveDateBefore, Date lastCurveDateAfter
+//    );
 }
