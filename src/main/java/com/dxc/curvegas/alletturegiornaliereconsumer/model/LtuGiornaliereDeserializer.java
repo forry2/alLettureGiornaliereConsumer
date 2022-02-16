@@ -30,7 +30,6 @@ public class LtuGiornaliereDeserializer extends JsonDeserializer<LtuGiornaliereR
             ltuGiornalereDto.quaLettura = integerFromParsedString(node.get("QUA_LETTURA").asText());
             ltuGiornalereDto.datLtuPrecedente = dateFromParsedString(node.get("DAT_LTU_PRECEDENTE").asText());
             ltuGiornalereDto.quaLtuPrecedente = integerFromParsedString(node.get("QUA_LTU_PRECEDENTE").asText());
-//                    node.get("QUA_LTU_PRECEDENTE").isNull() ? null : new BigDecimal(node.get("QUA_LTU_PRECEDENTE").asText());
             ltuGiornalereDto.codFlgValida = node.get("COD_FLG_VALIDA").isNull() ? null : node.get("COD_FLG_VALIDA").asText();
             ltuGiornalereDto.codFlgRettificata = node.get("COD_FLG_RETTIFICATA").isNull() ? null : node.get("COD_FLG_RETTIFICATA").asText();
             ltuGiornalereDto.codTipoFonteLtuGio = node.get("COD_TIPO_FONTE_LTU_GIO").isNull() ? null : node.get("COD_TIPO_FONTE_LTU_GIO").asText();
