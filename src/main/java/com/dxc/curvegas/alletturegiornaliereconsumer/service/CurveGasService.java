@@ -17,6 +17,7 @@ import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
+import java.time.Period;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -266,7 +267,11 @@ public class CurveGasService {
                         interpolationEndDate
                 );
 
-        long deltaDays = TimeUnit.DAYS.convert(interpolationEndDate.getTime() - interpolationStartDate.getTime(), TimeUnit.MILLISECONDS);
+//        long deltaDays = TimeUnit.DAYS.convert(interpolationEndDate.getTime() - interpolationStartDate.getTime(), TimeUnit.MILLISECONDS) + 1;
+        long deltaDays = Period.between(
+                interpolationStartDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate(),
+                interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+        ).getDays();
         if (deltaDays > 1) {
 
             ArrayList<LtuGiornaliereAggregatedDto> ltuMissingAggr = new ArrayList<>();
