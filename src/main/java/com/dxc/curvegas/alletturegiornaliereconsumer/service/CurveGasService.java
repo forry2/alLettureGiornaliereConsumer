@@ -121,15 +121,6 @@ public class CurveGasService {
         return (ObjectId) retIdDocument.get("_id");
     }
 
-//    public Integer getConsumoReale(LtuGiornaliereAggregatedDto ltu) {
-//        Document lastValidLtu = findLastValidQuaLettura(ltu.getCodPdf(), ltu.getCodTipoFornitura(), ltu.getCodTipVoceLtu(), ltu.getAnno(), ltu.getMese());
-//        if (lastValidLtu == null) return null;
-//
-//        Integer currLastQuaLettura = ltu.lettureSingole.stream().filter(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getQuaLettura() != null).max(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura)).map(LtuGiornaliereLetturaSingolaDto::getQuaLettura).orElse(null);
-//        if (currLastQuaLettura == null) return null;
-//        return currLastQuaLettura - (Integer) ((Document) lastValidLtu.get("lettureSingole")).get("quaLettura");
-//    }
-
     public void updateConsumoMensile(LtuGiornaliereAggregatedDto aggrLtuCorrente) {
         LtuGiornaliereLetturaSingolaDto lastValidLtuGiornaliere =
                 aggrLtuCorrente
@@ -205,7 +196,7 @@ public class CurveGasService {
         }
         aggrList.add(match(Criteria
                         .where("codPdf").is(codPdf)
-//                .and("codPdm").is(codPdm)
+                        .and("codPdm").is(codPdm)
                         .and("codTipoFornitura").is(codTipoFornitura)
                         .and("codTipVoceLtu").is(codTipVoceLtu)
                         .and("firstCurveDate").in(firstDates)
@@ -253,14 +244,12 @@ public class CurveGasService {
                     runningDate = DateUtils.addDays(runningDate, runningDaysDelta)
             ) {
                 Date finalRunningDate = runningDate;
-//                if (currentAggrLtu.lettureSingole.stream().noneMatch(ltu -> ltu.getDatLettura().compareTo(finalRunningDate) == 0 && ltu.getQuaLettura()!= null ))
                 currentAggrLtu.pushLtuGiornalieraRaw(
                         rawDto.toBuilder().datLettura(runningDate).codTipLtuGio("3").quaLettura(rawDto.getQuaLettura()).codTipoFonteLtuGio("6").build()
                 );
             }
             currentAggrLtu.lettureSingole.sort(Comparator.comparing(LtuGiornaliereLetturaSingolaDto::getDatLettura));
             updateStatistics(currentAggrLtu);
-//            updateConsumiReali(currentAggrLtu);
             repository.save(currentAggrLtu);
             return;
         }
@@ -304,7 +293,6 @@ public class CurveGasService {
                                     .build()
                     );
             }
-//        ltuAggrInterpolationList.addAll(ltuMissingAggr);
             ltuAggrInterpolationList.sort(Comparator.comparing(LtuGiornaliereAggregatedDto::getFirstCurveDate));
 
             Date finalInterpolationStartDate = interpolationStartDate;
@@ -328,7 +316,6 @@ public class CurveGasService {
                             interpolationEndDate
                     ).get(0).lettureSingole.stream().filter(ltu -> ltu.datLettura.compareTo(finalInterpolationEndDate) == 0).findFirst().get();
             Integer ltuDelta = lastInterpolationLtuSingola.getQuaLettura() - firstInterpolationLtuSingola.getQuaLettura();
-//            long deltaDays = TimeUnit.DAYS.convert(lastInterpolationLtuSingola.getDatLettura().getTime() - firstInterpolationLtuSingola.getDatLettura().getTime(), TimeUnit.MILLISECONDS);
             Date runningDate;
             ArrayList<LtuGiornaliereRawDto> interpolationsLtu = new ArrayList<>();
             int interpolationIndex = 1;
@@ -360,7 +347,6 @@ public class CurveGasService {
         }
         ltuAggrInterpolationList.forEach(
                 aggr -> {
-//                    updateConsumoMensile(aggr);
                     updateStatistics(aggr);
                 }
         );
