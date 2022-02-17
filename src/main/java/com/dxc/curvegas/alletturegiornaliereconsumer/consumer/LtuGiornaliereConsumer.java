@@ -96,10 +96,6 @@ public class LtuGiornaliereConsumer {
                     currentContentDateLtuAggr.pushLtuGiornalieraRaw(letturaSingola);
                 }
             }
-
-//            curveGasService.updateConsumiReali(ltuGiornaliereAggregatedDto);
-//            curveGasService.updateStatistics(currentContentDateLtuAggr);
-
             mongoTemplate.insert(currentContentDateLtuAggr, "ltuGiornaliereAggregated");
         } else {
             // C'è già un dato aggregato per questo anno/mese/pdf/tipo
@@ -118,9 +114,7 @@ public class LtuGiornaliereConsumer {
                 // Per questo anno/mese/pdf/tipo c'è già una lettura con dtaLettura uguale a quella arrivata
                 // Aggiorno i campi vivi, inserisco la lettura arrivata anche nello storico e salvo
                 currentContentDateLtuAggr.pushLtuGiornalieraRaw(nuovaLetturaGiornaliera);
-//                curveGasService.updateConsumiReali(retrievedLtuAggr);
                 curveGasService.updateStatistics(currentContentDateLtuAggr);
-//                retrievedLtuAggr.setConsumoReale(curveGasService.getConsumoReale(retrievedLtuAggr));
                 repository.save(currentContentDateLtuAggr);
 
             }
