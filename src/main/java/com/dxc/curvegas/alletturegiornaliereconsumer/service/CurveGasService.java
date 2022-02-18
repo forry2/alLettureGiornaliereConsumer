@@ -17,10 +17,9 @@ import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
-import java.time.Period;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.springframework.data.mongodb.core.aggregation.Aggregation.*;
@@ -196,11 +195,11 @@ public class CurveGasService {
             firstDates.add(runningDate);
         }
         aggrList.add(match(Criteria
-                        .where("codPdf").is(codPdf)
-                        .and("codPdm").is(codPdm)
-                        .and("codTipoFornitura").is(codTipoFornitura)
-                        .and("codTipVoceLtu").is(codTipVoceLtu)
-                        .and("firstCurveDate").in(firstDates)
+                .where("codPdf").is(codPdf)
+                .and("codPdm").is(codPdm)
+                .and("codTipoFornitura").is(codTipoFornitura)
+                .and("codTipVoceLtu").is(codTipVoceLtu)
+                .and("firstCurveDate").in(firstDates)
         ));
         aggrList.add(sort(Sort.Direction.ASC, "dtaPrimaLetturaValida"));
 
@@ -268,10 +267,11 @@ public class CurveGasService {
                 );
 
 //        long deltaDays = TimeUnit.DAYS.convert(interpolationEndDate.getTime() - interpolationStartDate.getTime(), TimeUnit.MILLISECONDS) + 1;
-        long deltaDays = Period.between(
-                interpolationStartDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate(),
-                interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-        ).getDays();
+        long deltaDays = interpolationStartDate
+                .toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+                .until(interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate(), ChronoUnit.DAYS);
         if (deltaDays > 1) {
 
             ArrayList<LtuGiornaliereAggregatedDto> ltuMissingAggr = new ArrayList<>();
@@ -418,12 +418,10 @@ public class CurveGasService {
                     ltuGiornaliereAggregatedDto.lettureSingole.get(0).setConsumoGiornaliero(
                             (long) (ltuGiornaliereAggregatedDto.lettureSingole.get(0).getQuaLettura() - yestedayQuaLettura)
                     );
-            }
-            else if (i==0){
+            } else if (i == 0) {
                 ltuGiornaliereAggregatedDto.lettureSingole.get(0).setConsumoGiornaliero(null);
-            }
-            else if (i> 0){
-                if (ltuGiornaliereAggregatedDto.lettureSingole.get(i-1).getQuaLettura() != null && ltuGiornaliereAggregatedDto.lettureSingole.get(i ).getQuaLettura() != null)
+            } else if (i > 0) {
+                if (ltuGiornaliereAggregatedDto.lettureSingole.get(i - 1).getQuaLettura() != null && ltuGiornaliereAggregatedDto.lettureSingole.get(i).getQuaLettura() != null)
                     ltuGiornaliereAggregatedDto.lettureSingole.get(i).setConsumoGiornaliero((long) (ltuGiornaliereAggregatedDto.lettureSingole.get(i).getQuaLettura() - ltuGiornaliereAggregatedDto.lettureSingole.get(i - 1).getQuaLettura()));
                 else
                     ltuGiornaliereAggregatedDto.lettureSingole.get(i).setConsumoGiornaliero(null);

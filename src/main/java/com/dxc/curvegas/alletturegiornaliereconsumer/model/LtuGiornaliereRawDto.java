@@ -48,6 +48,7 @@ public class LtuGiornaliereRawDto {
     public String codFlgRetPbl;
     public Date datForzatura;
     public String codFlgForzata;
+    public Date lastUpdate;
 
     public LtuGiornaliereLetturaSingolaItemDto getLetturaSingola(){
         return LtuGiornaliereLetturaSingolaItemDto

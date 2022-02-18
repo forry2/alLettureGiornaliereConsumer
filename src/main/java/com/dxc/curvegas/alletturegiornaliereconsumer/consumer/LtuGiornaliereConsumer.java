@@ -13,6 +13,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
@@ -47,7 +50,10 @@ public class LtuGiornaliereConsumer {
     }
 
     @KafkaListener(topics = "LTU_GIORNALIERE_TOPIC", concurrency = "1")
-    public void processMessage(String content) throws JsonProcessingException {
+    public void processMessage(
+            @Payload String content,
+            @Header("ccgHeader.messageType") String ccgMessageType
+    ) throws JsonProcessingException {
         long startTime = new Date().getTime();
         log.debug("Received json message: {}", content);
         LtuGiornaliereRawDto nuovaLetturaGiornaliera = objectMapper.readValue(content, LtuGiornaliereRawDto.class);
@@ -85,6 +91,7 @@ public class LtuGiornaliereConsumer {
                             .minQuaLettura(null)
                             .ltuGiornaliereStatsDto(new LtuGiornaliereStatsDto())
                             .lettureSingole(new ArrayList<>())
+                            .lastUpdate(new Date())
                             .build();
             currentContentDateLtuAggr.pushLtuGiornalieraRaw(nuovaLetturaGiornaliera);
 
@@ -92,7 +99,7 @@ public class LtuGiornaliereConsumer {
                 // TODO codice per creare il nuovo mese se non ci sono aggregati con le stesse chiavi
                 Date finalRunningDate = runningDate;
                 if (currentContentDateLtuAggr.lettureSingole.stream().noneMatch(ltuSingola -> ltuSingola.getDatLettura().compareTo(finalRunningDate) == 0)) {
-                    LtuGiornaliereRawDto letturaSingola = LtuGiornaliereRawDto.builder().datLettura(finalRunningDate).build();
+                    LtuGiornaliereRawDto letturaSingola = LtuGiornaliereRawDto.builder().datLettura(finalRunningDate).lastUpdate(currentContentDateLtuAggr.getLastUpdate()).build();
                     currentContentDateLtuAggr.pushLtuGiornalieraRaw(letturaSingola);
                 }
             }

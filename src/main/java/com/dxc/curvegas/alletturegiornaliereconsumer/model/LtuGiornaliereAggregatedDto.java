@@ -39,9 +39,11 @@ public class LtuGiornaliereAggregatedDto {
     Integer primaLetturaValida;
     Date dtaUltimaLetturaValida;
     Integer ultimaLetturaValida;
+    public Date lastUpdate;
     LtuGiornaliereStatsDto ltuGiornaliereStatsDto;
 
     public LtuGiornaliereAggregatedDto pushLtuGiornalieraRaw(LtuGiornaliereRawDto rawLtu) {
+        rawLtu.setLastUpdate(new Date());
         if (lettureSingole == null)
             lettureSingole = new ArrayList<>();
         Optional<LtuGiornaliereLetturaSingolaDto> ltuSingola =

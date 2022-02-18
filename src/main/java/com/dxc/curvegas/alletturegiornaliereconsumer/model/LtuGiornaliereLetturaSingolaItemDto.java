@@ -44,4 +44,5 @@ public class LtuGiornaliereLetturaSingolaItemDto {
     public String codFlgRetPbl;
     public Date datForzatura;
     public String codFlgForzata;
+    public Date lastUpdate;
 }
