@@ -2,6 +2,9 @@ package com.dxc.curvegas.alletturegiornaliereconsumer.service;
 
 import com.dxc.curvegas.alletturegiornaliereconsumer.model.*;
 import com.dxc.curvegas.alletturegiornaliereconsumer.repository.CustomLtuGiornaliereAggregatedRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.apache.commons.lang3.time.DateUtils;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -12,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
-import org.springframework.data.mongodb.core.aggregation.AggregationOperationContext;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
@@ -27,25 +29,31 @@ import static org.springframework.data.mongodb.core.aggregation.Aggregation.*;
 @Service
 public class CurveGasService {
     private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Autowired
     CustomLtuGiornaliereAggregatedRepository repository;
     @Autowired
     private MongoTemplate mongoTemplate;
 
+    public CurveGasService(){
+        SimpleModule module = new SimpleModule();
+        module.addDeserializer(LtuGiornaliereRawDto.class, new LtuGiornaliereDeserializer());
+        objectMapper.registerModule(module);
+        module = new SimpleModule();
+        module.addDeserializer(Guasto.class, new GuastoDeserializer());
+        objectMapper.registerModule(module);
+    }
+
     public Document findLastValidQuaLettura(String codPdf, String codTipoFornitura, String codTipVoceLtu, String anno, String mese) {
-        Document retDoc = null;
         ArrayList<AggregationOperation> aggrList = new ArrayList<>();
         aggrList.add(match(new Criteria().and("codPdf").is(codPdf).and("codTipoFornitura").is(codTipoFornitura).and("codTipVoceLtu").is(codTipVoceLtu).and("anno").lte(anno)));
         aggrList.add(sort(Sort.Direction.DESC, "anno").and(Sort.Direction.DESC, "mese"));
-        AggregationOperation customAddFieldsOperation = new AggregationOperation() {
-            @Override
-            public Document toDocument(AggregationOperationContext aoc) {
-                Document doc = new Document();
-                Document subDoc = new Document();
-                subDoc.put("$concat", Arrays.asList("$anno", "$mese"));
-                doc.put("annoMeseString", subDoc);
-                return new Document("$addFields", doc);
-            }
+        AggregationOperation customAddFieldsOperation = aoc -> {
+            Document doc = new Document();
+            Document subDoc = new Document();
+            subDoc.put("$concat", Arrays.asList("$anno", "$mese"));
+            doc.put("annoMeseString", subDoc);
+            return new Document("$addFields", doc);
         };
         aggrList.add(customAddFieldsOperation);
         aggrList.add(match(Criteria.where("annoMeseString").lt(anno + mese)));
@@ -108,12 +116,16 @@ public class CurveGasService {
 
     public ObjectId findNextValidAggregatedLtuId(LtuGiornaliereAggregatedDto ltu) {
         ArrayList<AggregationOperation> aggregationOperations = new ArrayList<>();
-        ObjectId retId = null;
-
         aggregationOperations.add(match(Criteria.where("codPdf").is(ltu.getCodPdf()).and("codTipoFornitura").is(ltu.getCodTipoFornitura()).and("codTipVoceLtu").is(ltu.getCodTipVoceLtu()).and("anno").gte(ltu.getAnno())));
         aggregationOperations.add(unwind("$lettureSingole"));
         aggregationOperations.add(sort(Sort.Direction.ASC, "lettureSingole.datLettura"));
-        aggregationOperations.add(match(Criteria.where("lettureSingole.quaLettura").ne(null).and("lettureSingole.datLettura").gt(ltu.lettureSingole.stream().max(Comparator.comparing(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getDatLettura())).get().getDatLettura())));
+        aggregationOperations.add(match(
+                Criteria
+                        .where("lettureSingole.quaLettura")
+                        .ne(null)
+                        .and("lettureSingole.datLettura")
+                        .gt(ltu.lettureSingole.stream().max(Comparator.comparing(ltuGiornaliereLetturaSingolaDto -> ltuGiornaliereLetturaSingolaDto.getDatLettura())).get().getDatLettura())
+        ));
         aggregationOperations.add(limit(1));
         aggregationOperations.add(project("_id"));
         Document retIdDocument = mongoTemplate.aggregate(newAggregation(aggregationOperations), "ltuGiornaliereAggregated", Document.class).getUniqueMappedResult();
@@ -203,7 +215,7 @@ public class CurveGasService {
         ));
         aggrList.add(sort(Sort.Direction.ASC, "dtaPrimaLetturaValida"));
 
-        return new ArrayList<LtuGiornaliereAggregatedDto>(mongoTemplate.aggregate(newAggregation(aggrList), "ltuGiornaliereAggregated", LtuGiornaliereAggregatedDto.class).getMappedResults());
+        return new ArrayList<>(mongoTemplate.aggregate(newAggregation(aggrList), "ltuGiornaliereAggregated", LtuGiornaliereAggregatedDto.class).getMappedResults());
     }
 
     public void interpolateAggregatedLtus(LtuGiornaliereRawDto rawDto, InterpolationDirection direction) {
@@ -243,7 +255,6 @@ public class CurveGasService {
                     !runningDate.after(currentAggrLtu.getLastCurveDate()) && !runningDate.before(currentAggrLtu.getFirstCurveDate());
                     runningDate = DateUtils.addDays(runningDate, runningDaysDelta)
             ) {
-                Date finalRunningDate = runningDate;
                 currentAggrLtu.pushLtuGiornalieraRaw(
                         rawDto.toBuilder().datLettura(runningDate).codTipLtuGio("3").quaLettura(rawDto.getQuaLettura()).codTipoFonteLtuGio("6").build()
                 );
@@ -253,7 +264,6 @@ public class CurveGasService {
             repository.save(currentAggrLtu);
             return;
         }
-
 
         // Recupero tutti gli aggregati oggetto di interpolazione
         ArrayList<LtuGiornaliereAggregatedDto> ltuAggrInterpolationList =
@@ -266,7 +276,6 @@ public class CurveGasService {
                         interpolationEndDate
                 );
 
-//        long deltaDays = TimeUnit.DAYS.convert(interpolationEndDate.getTime() - interpolationStartDate.getTime(), TimeUnit.MILLISECONDS) + 1;
         long deltaDays = interpolationStartDate
                 .toInstant()
                 .atZone(ZoneId.systemDefault())
@@ -274,7 +283,6 @@ public class CurveGasService {
                 .until(interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate(), ChronoUnit.DAYS);
         if (deltaDays > 1) {
 
-            ArrayList<LtuGiornaliereAggregatedDto> ltuMissingAggr = new ArrayList<>();
             for (
                     Date runningDate = Date.from(interpolationStartDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().withDayOfMonth(1).atZone(ZoneId.systemDefault()).toInstant());
                     runningDate.before(Date.from(interpolationEndDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().withDayOfMonth(1).atZone(ZoneId.systemDefault()).toInstant()));
@@ -320,7 +328,7 @@ public class CurveGasService {
                             interpolationEndDate,
                             interpolationEndDate
                     ).get(0).lettureSingole.stream().filter(ltu -> ltu.datLettura.compareTo(finalInterpolationEndDate) == 0).findFirst().get();
-            Integer ltuDelta = lastInterpolationLtuSingola.getQuaLettura() - firstInterpolationLtuSingola.getQuaLettura();
+            int ltuDelta = lastInterpolationLtuSingola.getQuaLettura() - firstInterpolationLtuSingola.getQuaLettura();
             Date runningDate;
             ArrayList<LtuGiornaliereRawDto> interpolationsLtu = new ArrayList<>();
             int interpolationIndex = 1;
@@ -340,14 +348,12 @@ public class CurveGasService {
             }
 
             interpolationsLtu.forEach(
-                    rawDto1 -> {
-                        ltuAggrInterpolationList
-                                .stream()
-                                .filter(aggr -> !aggr.getFirstCurveDate().after(rawDto1.datLettura) && !aggr.getLastCurveDate().before(rawDto1.datLettura))
-                                .findFirst()
-                                .get()
-                                .pushLtuGiornalieraRaw(rawDto1);
-                    }
+                    rawDto1 -> ltuAggrInterpolationList
+                            .stream()
+                            .filter(aggr -> !aggr.getFirstCurveDate().after(rawDto1.datLettura) && !aggr.getLastCurveDate().before(rawDto1.datLettura))
+                            .findFirst()
+                            .get()
+                            .pushLtuGiornalieraRaw(rawDto1)
             );
         }
         ltuAggrInterpolationList.forEach(
@@ -425,6 +431,109 @@ public class CurveGasService {
                     ltuGiornaliereAggregatedDto.lettureSingole.get(i).setConsumoGiornaliero((long) (ltuGiornaliereAggregatedDto.lettureSingole.get(i).getQuaLettura() - ltuGiornaliereAggregatedDto.lettureSingole.get(i - 1).getQuaLettura()));
                 else
                     ltuGiornaliereAggregatedDto.lettureSingole.get(i).setConsumoGiornaliero(null);
+            }
+        }
+    }
+
+    public void manageLtuGiornalieraMessage(String content) throws JsonProcessingException {
+        long startTime = new Date().getTime();
+        LtuGiornaliereRawDto nuovaLetturaGiornaliera = objectMapper.readValue(content, LtuGiornaliereRawDto.class);
+        mongoTemplate.insert(nuovaLetturaGiornaliera, "ltuGiornaliereRaw");
+        if (nuovaLetturaGiornaliera.datLettura == null) {
+            log.error("Content {} caused Exception in parsing", content);
+            return;
+        }
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(nuovaLetturaGiornaliera.datLettura);
+        String mese = String.format("%02d", cal.get(Calendar.MONTH) + 1);
+        String anno = String.format("%04d", cal.get(Calendar.YEAR));
+
+        LtuGiornaliereAggregatedDto currentContentDateLtuAggr = repository.getLtuGiornaliereAggregatedDtoByAnnoAndMeseAndCodPdfAndCodTipoFornituraAndCodTipVoceLtu(anno, mese, nuovaLetturaGiornaliera.codPdf, nuovaLetturaGiornaliera.codTipoFornitura, nuovaLetturaGiornaliera.codTipVoceLtu);
+        if (currentContentDateLtuAggr == null) {
+            // Non c'è ancora nessun dato aggregato con questo anno/mese/pdf/tipo
+            // Ne creo uno nuovo e lo inserisco nel db
+            currentContentDateLtuAggr =
+                    LtuGiornaliereAggregatedDto
+                            .builder()
+                            .codPdf(nuovaLetturaGiornaliera.codPdf)
+                            .codTipoFornitura(nuovaLetturaGiornaliera.codTipoFornitura)
+                            .codPdm(nuovaLetturaGiornaliera.codPdm)
+                            .mese(mese)
+                            .anno(anno)
+                            .firstCurveDate(getFirstDateOfMonth(nuovaLetturaGiornaliera.datLettura))
+                            .lastCurveDate(getLastDateOfMonth(nuovaLetturaGiornaliera.datLettura))
+                            .codTipVoceLtu(nuovaLetturaGiornaliera.codTipVoceLtu)
+                            .consumoReale(null)
+                            .dtaPrimaLetturaValida(null)
+                            .primaLetturaValida(null)
+                            .dtaUltimaLetturaValida(null)
+                            .ultimaLetturaValida(null)
+                            .maxQuaLettura(null)
+                            .minQuaLettura(null)
+                            .ltuGiornaliereStatsDto(new LtuGiornaliereStatsDto())
+                            .lettureSingole(new ArrayList<>())
+                            .lastUpdate(new Date())
+                            .build();
+            currentContentDateLtuAggr.pushLtuGiornalieraRaw(nuovaLetturaGiornaliera);
+
+            for (Date runningDate = currentContentDateLtuAggr.getFirstCurveDate(); !runningDate.after(currentContentDateLtuAggr.getLastCurveDate()); runningDate = DateUtils.addDays(runningDate, 1)) {
+                // TODO codice per creare il nuovo mese se non ci sono aggregati con le stesse chiavi
+                Date finalRunningDate = runningDate;
+                if (currentContentDateLtuAggr.lettureSingole.stream().noneMatch(ltuSingola -> ltuSingola.getDatLettura().compareTo(finalRunningDate) == 0)) {
+                    LtuGiornaliereRawDto letturaSingola = LtuGiornaliereRawDto.builder().datLettura(finalRunningDate).lastUpdate(currentContentDateLtuAggr.getLastUpdate()).build();
+                    currentContentDateLtuAggr.pushLtuGiornalieraRaw(letturaSingola);
+                }
+            }
+            mongoTemplate.insert(currentContentDateLtuAggr, "ltuGiornaliereAggregated");
+        } else {
+            // C'è già un dato aggregato per questo anno/mese/pdf/tipo
+            if (currentContentDateLtuAggr.lettureSingole.stream().noneMatch(l -> l.datLettura.compareTo(nuovaLetturaGiornaliera.datLettura) == 0)) {
+                // Per questo anno/mese/pdf/tipo non c'è una lettura con dtaLettura uguale a quella appena entrata
+                // la creo, aggiorno le letture per questo anno/mese/pdf/tipo e salvo
+                LtuGiornaliereLetturaSingolaDto singolaDto = new LtuGiornaliereLetturaSingolaDto();
+                BeanUtils.copyProperties(nuovaLetturaGiornaliera, singolaDto);
+                LtuGiornaliereLetturaSingolaItemDto storicoItem = new LtuGiornaliereLetturaSingolaItemDto();
+                BeanUtils.copyProperties(nuovaLetturaGiornaliera, storicoItem);
+                singolaDto.storico = new ArrayList<>(List.of(storicoItem));
+                currentContentDateLtuAggr.lettureSingole.add(singolaDto);
+                updateStatistics(currentContentDateLtuAggr);
+                repository.save(currentContentDateLtuAggr);
+            } else {
+                // Per questo anno/mese/pdf/tipo c'è già una lettura con dtaLettura uguale a quella arrivata
+                // Aggiorno i campi vivi, inserisco la lettura arrivata anche nello storico e salvo
+                currentContentDateLtuAggr.pushLtuGiornalieraRaw(nuovaLetturaGiornaliera);
+                updateStatistics(currentContentDateLtuAggr);
+                repository.save(currentContentDateLtuAggr);
+
+            }
+            log.debug("Insert letturaSingola: {}\n for codPdf {}, anno {}, mese {}", nuovaLetturaGiornaliera.getLetturaSingola(), nuovaLetturaGiornaliera.codPdf, anno, mese);
+        }
+        if (nuovaLetturaGiornaliera.getCodTipLtuGio().equals("4")) {
+            interpolateAggregatedLtus(nuovaLetturaGiornaliera, InterpolationDirection.FORWARD);
+            interpolateAggregatedLtus(nuovaLetturaGiornaliera, InterpolationDirection.BACKWARD);
+        }
+        updateStatistics(currentContentDateLtuAggr);
+        log.debug("Message processed in {} ms", new Date().getTime() - startTime);
+    }
+
+    public void manageGuastoMessage(String content) throws JsonProcessingException {
+        Guasto guasto = objectMapper.readValue(content, Guasto.class);
+        log.debug("Received failure message: {}", guasto.toString());
+        ArrayList<LtuGiornaliereAggregatedDto> guastoLtuGiornaliereAggrList = getInterpolationLtuGiornaliereAggregatedList(
+                guasto.getCodPdf(),
+                guasto.getCodPdm(),
+                guasto.getCodTipoFornitura(),
+                "46",
+                guasto.getDatInoGuasto(),
+                guasto.getDatFinGuasto()
+        );
+        for (LtuGiornaliereAggregatedDto aggr : guastoLtuGiornaliereAggrList){
+            for (LtuGiornaliereLetturaSingolaDto singola : aggr.getLettureSingole()){
+                if (!singola.datLettura.after(guasto.getDatInoGuasto()) && !singola.datLettura.before(guasto.getDatFinGuasto())){
+                    LtuGiornaliereRawDto rawDto = new LtuGiornaliereRawDto();
+                    BeanUtils.copyProperties(singola, rawDto);
+                    aggr.pushLtuGiornalieraRaw(rawDto);
+                }
             }
         }
     }

@@ -45,4 +45,5 @@ public class LtuGiornaliereLetturaSingolaItemDto {
     public Date datForzatura;
     public String codFlgForzata;
     public Date lastUpdate;
+    public Guasto guasto;
 }
