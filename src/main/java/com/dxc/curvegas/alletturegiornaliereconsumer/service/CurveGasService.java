@@ -529,12 +529,14 @@ public class CurveGasService {
         );
         for (LtuGiornaliereAggregatedDto aggr : guastoLtuGiornaliereAggrList){
             for (LtuGiornaliereLetturaSingolaDto singola : aggr.getLettureSingole()){
-                if (!singola.datLettura.after(guasto.getDatInoGuasto()) && !singola.datLettura.before(guasto.getDatFinGuasto())){
-                    LtuGiornaliereRawDto rawDto = new LtuGiornaliereRawDto();
-                    BeanUtils.copyProperties(singola, rawDto);
-                    aggr.pushLtuGiornalieraRaw(rawDto);
+                if (!singola.datLettura.before(guasto.getDatInoGuasto()) && !singola.datLettura.after(guasto.getDatFinGuasto())){
+                    LtuGiornaliereLetturaSingolaItemDto singolaItemDto = new LtuGiornaliereLetturaSingolaItemDto();
+                    BeanUtils.copyProperties(singola, singolaItemDto);
+                    singolaItemDto.setGuasto(guasto);
+                    aggr.pushLtuGiornalieraSingolaItem(singolaItemDto);
                 }
             }
         }
+        repository.saveAll(guastoLtuGiornaliereAggrList);
     }
 }
